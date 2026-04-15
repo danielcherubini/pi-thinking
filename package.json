@@ -1,0 +1,20 @@
+{
+  "name": "pi-thinking",
+  "version": "0.1.0",
+  "description": "Muted, themed rendering for thinking blocks in pi.",
+  "type": "module",
+  "license": "MIT",
+  "keywords": ["pi", "pi-extension", "pi-package", "thinking", "tui"],
+  "pi": { "extensions": ["./src/index.ts"] },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@types/bun": "latest",
+    "@types/node": "^24.5.2",
+    "typescript": "^6.0.2"
+  }
+}
