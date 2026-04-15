@@ -5,8 +5,8 @@
 
 ## Visuals
 
-![Thinking block rendering 1](docs/screenshots/screenshot1.png)
 ![Thinking block rendering 2](docs/screenshots/screenshot2.png)
+![Thinking block rendering 1](docs/screenshots/screenshot1.png)
 ![Thinking block rendering 3](docs/screenshots/screenshot3.png)
 
 ## Installation
