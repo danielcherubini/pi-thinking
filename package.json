@@ -4,8 +4,34 @@
   "description": "Muted, themed rendering for thinking blocks in pi.",
   "type": "module",
   "license": "MIT",
-  "keywords": ["pi", "pi-extension", "pi-package", "thinking", "tui"],
-  "pi": { "extensions": ["./src/index.ts"] },
+  "keywords": [
+    "pi",
+    "pi-extension",
+    "pi-package",
+    "thinking",
+    "tui"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "files": [
+    "src",
+    "tsconfig.json",
+    "README.md",
+    "docs"
+  ],
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "Daniel Cherubini",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test"

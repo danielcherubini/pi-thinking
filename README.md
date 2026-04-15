@@ -1,8 +1,15 @@
 # pi-thinking
 
-Muted, themed rendering for thinking blocks in [pi](https://github.com/badlogic/pi-mono) — calmer colors, dim syntax highlighting inside fenced code, and a themed `"Thinking"` label.
+> [!NOTE]
+> Muted, themed rendering for thinking blocks in [pi](https://github.com/badlogic/pi-mono) — calmer colors, dim syntax highlighting inside fenced code, and a themed `"Thinking"` label.
 
-## Install
+## Visuals
+
+![Thinking block rendering 1](docs/screenshots/screenshot1.png)
+![Thinking block rendering 2](docs/screenshots/screenshot2.png)
+![Thinking block rendering 3](docs/screenshots/screenshot3.png)
+
+## Installation
 
 ### Local development
 
@@ -21,7 +28,13 @@ Or add the entry path to `~/.pi/agent/settings.json`:
 ### Published
 
 ```bash
-pi install git:github.com/<owner>/pi-thinking
+pi install git:github.com/danielcherubini/pi-thinking
+```
+
+Or via npm:
+
+```bash
+pi install npm:pi-thinking
 ```
 
 ## Requirements
