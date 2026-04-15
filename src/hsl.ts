@@ -173,3 +173,31 @@ export function deriveDimColor(
 export function rgbToTruecolorFg(rgb: RGB): string {
 	return `\x1b[38;2;${toByte(rgb.r)};${toByte(rgb.g)};${toByte(rgb.b)}m`;
 }
+
+export function rgbToTruecolorBg(rgb: RGB): string {
+	return `\x1b[48;2;${toByte(rgb.r)};${toByte(rgb.g)};${toByte(rgb.b)}m`;
+}
+
+/**
+ * Derive a dark "card" background color from a foreground reference.
+ *
+ * Keeps the reference hue so the card harmonizes with the dim fg palette,
+ * but pins lightness to `targetLightness` and scales saturation by
+ * `saturationFactor`. Intended for building a subtle container bg from an
+ * existing theme fg (e.g. thinkingText) when the theme exposes no dedicated
+ * background token for this purpose.
+ */
+export function deriveBgColor(
+	input: string | number,
+	targetLightness: number,
+	saturationFactor: number,
+): string {
+	const rgb = typeof input === "number" ? ansi256ToRgb(input) : hexToRgb(input);
+	const hsl = rgbToHsl(rgb);
+	const target: HSL = {
+		h: hsl.h,
+		s: clamp(hsl.s * saturationFactor, 0, 1),
+		l: clamp(targetLightness, 0, 1),
+	};
+	return rgbToHex(hslToRgb(target));
+}
