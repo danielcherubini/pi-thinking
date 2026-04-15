@@ -1,28 +1,19 @@
 import type { Theme } from "@mariozechner/pi-coding-agent";
 import { highlightCode as piHighlightCode } from "@mariozechner/pi-coding-agent";
 import type { MarkdownTheme } from "@mariozechner/pi-tui";
-import { visibleWidth } from "@mariozechner/pi-tui";
 import {
-	deriveBgColor,
 	deriveDimColor,
-	hexToRgb,
 	parseAnsiFgToRgb,
 	rgbToHsl,
-	rgbToTruecolorBg,
 	rgbToTruecolorFg,
+	hexToRgb,
 } from "./hsl.js";
 
 export interface MutedThemeOptions {
 	saturationFactor?: number; // default 0.5
-	codeBlockBg?: boolean; // default true
-	codeBlockBgLightness?: number; // default 0.10
-	codeBlockBgSaturationFactor?: number; // default 0.3
 }
 
 const DEFAULT_ANCHOR_L = 0.4;
-const DEFAULT_CODE_BG_L = 0.10;
-const DEFAULT_CODE_BG_SAT_FACTOR = 0.3;
-const BG_CLOSE = "\x1b[49m";
 
 // Matches any foreground-color SGR escape: truecolor (38;2;r;g;b) or 256-palette (38;5;n).
 // We intentionally only target fg color escapes; bg (48;...) and style escapes
@@ -69,34 +60,11 @@ export function buildMutedMarkdownTheme(
 	opts: MutedThemeOptions = {},
 ): MarkdownTheme {
 	const saturationFactor = opts.saturationFactor ?? 0.5;
-	const codeBlockBg = opts.codeBlockBg ?? true;
-	const bgL = opts.codeBlockBgLightness ?? DEFAULT_CODE_BG_L;
-	const bgSatFactor = opts.codeBlockBgSaturationFactor ?? DEFAULT_CODE_BG_SAT_FACTOR;
 
 	// Anchor lightness: derived from the theme's thinkingText foreground color.
 	const thinkingAnsi = piTheme.getFgAnsi("thinkingText");
 	const anchorRgb = parseAnsiFgToRgb(thinkingAnsi);
 	const anchorL = anchorRgb ? rgbToHsl(anchorRgb).l : DEFAULT_ANCHOR_L;
-
-	// Code-block bg: derived from thinkingText (same hue) pushed to a very low
-	// lightness with reduced saturation. When we can't parse thinkingText (empty
-	// stub, unknown format) fall back to no bg — a ragged rectangle with a
-	// random color is worse than no card at all.
-	const bgAnsi =
-		codeBlockBg && anchorRgb
-			? rgbToTruecolorBg(
-					hexToRgb(
-						deriveBgColor(
-							"#" +
-								[anchorRgb.r, anchorRgb.g, anchorRgb.b]
-									.map((v) => v.toString(16).padStart(2, "0"))
-									.join(""),
-							bgL,
-							bgSatFactor,
-						),
-					),
-				)
-			: null;
 
 	// Shared memoization cache for the entire theme lifetime.
 	const dimCache = new Map<string, string>();
@@ -121,20 +89,7 @@ export function buildMutedMarkdownTheme(
 		underline: (text) => `\x1b[4m${fg("thinkingText", text)}\x1b[24m`,
 		highlightCode: (code, lang) => {
 			const lines = piHighlightCode(code, lang);
-			const dimmed = lines.map((l) =>
-				dimAnsiLine(l, anchorL, saturationFactor, dimCache),
-			);
-			if (!bgAnsi) return dimmed;
-			// Card rectangle: pad every line to the block's longest line width,
-			// then wrap in the bg color. Ragged right intentionally sits just past
-			// the longest code line. Borders (fence delimiters) are emitted by
-			// pi-tui via codeBlockBorder() before/after highlightCode and are
-			// stateless, so they remain un-backgrounded on purpose.
-			const maxW = dimmed.reduce((m, l) => Math.max(m, visibleWidth(l)), 0);
-			return dimmed.map((l) => {
-				const pad = " ".repeat(Math.max(0, maxW - visibleWidth(l)));
-				return `${bgAnsi}${l}${pad}${BG_CLOSE}`;
-			});
+			return lines.map((l) => dimAnsiLine(l, anchorL, saturationFactor, dimCache));
 		},
 	};
 }
