@@ -69,7 +69,7 @@ function makeStubAssistant() {
 					} else {
 						this.contentContainer.addChild({
 							__type: "Markdown",
-							text: `**Thinking:** ${content.thinking.trim()}`,
+							text: `Thinking: ${content.thinking.trim()}`,
 							theme: this.markdownTheme,
 						});
 						if (hasVisibleAfter) this.contentContainer.addChild({ __type: "Spacer" });
@@ -84,7 +84,10 @@ function makeStubTheme() {
 	return {
 		fg: (token: string, text: string) => `[${token}]${text}[/]`,
 		italic: (text: string) => `<i>${text}</i>`,
-		getFgAnsi: (_token: string) => "\x1b[38;2;136;136;136m",
+		getFgAnsi: (token: string) =>
+			token === "thinkingText"
+				? "\x1b[38;2;136;136;136m"
+				: "\x1b[38;2;200;200;200m",
 	} as any;
 }
 
@@ -93,7 +96,7 @@ function makeStubTheme() {
 // ---------------------------------------------------------------------------
 
 describe("patchTarget: thinking branch", () => {
-	test("Test 1: thinking branch inlines the 'Thinking:' label into the body markdown with a NON-original theme", () => {
+	test("Test 1: thinking branch inlines an ACCENT-colored 'Thinking:' label into the body markdown with a NON-original theme", () => {
 		const Stub = makeStubAssistant();
 		patchTarget(Stub, makeStubTheme, { skipShapeCheck: true });
 		const inst = new Stub();
@@ -106,12 +109,20 @@ describe("patchTarget: thinking branch", () => {
 		);
 		expect(stray).toBeUndefined();
 
-		// Exactly one Markdown child; its text must begin with the bold label and
-		// include the body. Theme must be the muted one (not the original).
+		// Exactly one Markdown child. Its text must contain:
+		//   - the accent-wrapped "Thinking:" label (via stub: [accent]Thinking:[/])
+		//   - a re-emit of the thinkingText ANSI escape right after, to keep the
+		//     body from falling back to default terminal fg
+		//   - the body text
 		const md = children.find((c: any) => isMarkdown(c));
 		expect(md).toBeDefined();
-		expect(md.text.startsWith("**Thinking:** ")).toBe(true);
+		expect(md.text).toContain("[accent]Thinking:[/]");
+		expect(md.text).toContain("\x1b[38;2;136;136;136m"); // thinkingText re-emit
 		expect(md.text).toContain("hello");
+		// Label must precede the body
+		expect(md.text.indexOf("[accent]Thinking:[/]")).toBeLessThan(
+			md.text.indexOf("hello"),
+		);
 		expect(md.theme).not.toBe(ORIGINAL_THEME);
 	});
 

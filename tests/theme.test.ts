@@ -184,6 +184,50 @@ describe("dimAnsiLine: muted syntax rewrite", () => {
 	});
 });
 
+describe("highlightCode: dim default for un-tokenized chars", () => {
+	test("prepends the code-default fg ANSI to every line", () => {
+		const t = buildMutedMarkdownTheme(makeStubTheme());
+		const out = t.highlightCode!("let x = 1", "js");
+		for (const line of out) {
+			expect(line.startsWith(THINKING_TEXT_ANSI)).toBe(true);
+		}
+	});
+
+	test("re-emits code-default after every \\x1b[39m fg reset", () => {
+		const t = buildMutedMarkdownTheme(makeStubTheme());
+		const out = t.highlightCode!("let x = 1", "js");
+		// Any internal fg reset must be immediately followed by our default fg.
+		for (const line of out) {
+			const resets = [...line.matchAll(/\x1b\[39m/g)];
+			for (const m of resets) {
+				const after = line.slice(m.index! + m[0].length);
+				// Tail-end reset may be the very last char — that's fine.
+				if (after.length === 0) continue;
+				expect(after.startsWith(THINKING_TEXT_ANSI)).toBe(true);
+			}
+		}
+	});
+
+	test("terminates every line with a final \\x1b[39m reset", () => {
+		const t = buildMutedMarkdownTheme(makeStubTheme());
+		const out = t.highlightCode!("x\ny", "js");
+		for (const line of out) {
+			expect(line.endsWith("\x1b[39m")).toBe(true);
+		}
+	});
+
+	test("skips injection when thinkingText ANSI is empty (no default to apply)", () => {
+		// With no anchor ANSI, we can't derive a code-default color; highlightCode
+		// should just return the dimmed lines without the wrap.
+		const t = buildMutedMarkdownTheme(makeStubTheme({ thinkingText: "" }));
+		const out = t.highlightCode!("x", "js");
+		for (const line of out) {
+			// No leading thinkingText escape possible (we don't have one).
+			expect(line.startsWith(THINKING_TEXT_ANSI)).toBe(false);
+		}
+	});
+});
+
 describe("buildMutedMarkdownTheme: fallback anchor when thinkingText ANSI is unparseable", () => {
 	test("falls back to 0.4 when getFgAnsi returns empty", () => {
 		// With an empty string for thinkingText, parseAnsiFgToRgb returns null.

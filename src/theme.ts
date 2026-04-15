@@ -66,6 +66,14 @@ export function buildMutedMarkdownTheme(
 	const anchorRgb = parseAnsiFgToRgb(thinkingAnsi);
 	const anchorL = anchorRgb ? rgbToHsl(anchorRgb).l : DEFAULT_ANCHOR_L;
 
+	// Default fg color used for UN-highlighted chars inside code blocks.
+	// cli-highlight only emits color escapes for recognized tokens — the gaps
+	// between them (operators, whitespace, unrecognized identifiers) render in
+	// the terminal's default color (often bright white on dark themes). We
+	// prepend this escape per line and re-emit it after every `\x1b[39m` fg
+	// reset so the gaps inherit a dim color instead of default white.
+	const codeDefaultFg = thinkingAnsi || "";
+
 	// Shared memoization cache for the entire theme lifetime.
 	const dimCache = new Map<string, string>();
 
@@ -89,7 +97,18 @@ export function buildMutedMarkdownTheme(
 		underline: (text) => `\x1b[4m${fg("thinkingText", text)}\x1b[24m`,
 		highlightCode: (code, lang) => {
 			const lines = piHighlightCode(code, lang);
-			return lines.map((l) => dimAnsiLine(l, anchorL, saturationFactor, dimCache));
+			return lines.map((l) => {
+				const dimmed = dimAnsiLine(l, anchorL, saturationFactor, dimCache);
+				if (!codeDefaultFg) return dimmed;
+				// Blanket the line in the code-default color; after every fg reset
+				// (emitted by cli-highlight between colored tokens) re-open the
+				// default so un-tokenized chars inherit it.
+				const withDefault = dimmed.replace(
+					/\x1b\[39m/g,
+					`\x1b[39m${codeDefaultFg}`,
+				);
+				return `${codeDefaultFg}${withDefault}\x1b[39m`;
+			});
 		},
 	};
 }

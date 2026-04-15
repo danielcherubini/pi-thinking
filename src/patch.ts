@@ -119,14 +119,23 @@ export function patchTarget(
 					}
 				} else {
 					// Visible thinking branch — prepend an inline "Thinking:" label
-					// to the body content (same line) and use a MUTED MarkdownTheme.
-					// The **bold** wrapper routes through the muted theme's `bold`
-					// hook so the label renders bolder than the surrounding prose.
+					// in ACCENT color to the body content (same line) and use a
+					// MUTED MarkdownTheme for the whole paragraph.
+					//
+					// Technique (borrowed from pi-tool-display): embed raw ANSI for
+					// the label, then re-emit the body color escape immediately
+					// after the label's `\x1b[39m` reset. Otherwise the fg reset
+					// inside the label wipes the Markdown component's default
+					// thinkingText color and the body prose would render in the
+					// terminal's default white.
+					//
 					// Trade-off: if the first line of content is a markdown heading
 					// or other block-level token, prepending inline prose flattens
-					// it. Acceptable: the label's inline placement is the goal.
+					// it. Acceptable — the inline label is the goal.
 					const t = ensureTheme();
-					const labeled = `**Thinking:** ${content.thinking.trim()}`;
+					const labelAnsi = t.fg("accent", "Thinking:");
+					const bodyColorAnsi = t.getFgAnsi("thinkingText");
+					const labeled = `${labelAnsi}${bodyColorAnsi} ${content.thinking.trim()}`;
 					this.contentContainer.addChild(
 						new Markdown(labeled, 1, 0, ensureMuted(), {
 							color: (text: string) => t.fg("thinkingText", text),
