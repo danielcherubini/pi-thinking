@@ -69,7 +69,7 @@ function makeStubAssistant() {
 					} else {
 						this.contentContainer.addChild({
 							__type: "Markdown",
-							text: content.thinking.trim(),
+							text: `**Thinking:** ${content.thinking.trim()}`,
 							theme: this.markdownTheme,
 						});
 						if (hasVisibleAfter) this.contentContainer.addChild({ __type: "Spacer" });
@@ -93,25 +93,26 @@ function makeStubTheme() {
 // ---------------------------------------------------------------------------
 
 describe("patchTarget: thinking branch", () => {
-	test("Test 1: thinking branch prepends a label and uses a NON-original markdown theme", () => {
+	test("Test 1: thinking branch inlines the 'Thinking:' label into the body markdown with a NON-original theme", () => {
 		const Stub = makeStubAssistant();
 		patchTarget(Stub, makeStubTheme, { skipShapeCheck: true });
 		const inst = new Stub();
 		inst.updateContent({ content: [{ type: "thinking", thinking: "hello" }] });
 
 		const children = inst.contentContainer.children;
-		// There should be a label child whose text mentions "Thinking".
-		const labelIdx = children.findIndex(
+		// No separate Text label — the label now lives inside the body Markdown.
+		const stray = children.find(
 			(c: any) => isText(c) && typeof c.text === "string" && c.text.includes("Thinking"),
 		);
-		expect(labelIdx).toBeGreaterThanOrEqual(0);
+		expect(stray).toBeUndefined();
 
-		// There should be a Markdown child whose theme is NOT the original.
-		const md = children.find((c: any) => isMarkdown(c) && c.text === "hello");
+		// Exactly one Markdown child; its text must begin with the bold label and
+		// include the body. Theme must be the muted one (not the original).
+		const md = children.find((c: any) => isMarkdown(c));
 		expect(md).toBeDefined();
+		expect(md.text.startsWith("**Thinking:** ")).toBe(true);
+		expect(md.text).toContain("hello");
 		expect(md.theme).not.toBe(ORIGINAL_THEME);
-		// Label must come BEFORE the body markdown.
-		expect(labelIdx).toBeLessThan(children.indexOf(md));
 	});
 
 	test("Test 2: text branch still uses the ORIGINAL markdownTheme", () => {

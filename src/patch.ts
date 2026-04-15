@@ -118,14 +118,17 @@ export function patchTarget(
 						this.contentContainer.addChild(new Spacer(1));
 					}
 				} else {
-					// Visible thinking branch — prepend a "Thinking" label line and
-					// use a MUTED MarkdownTheme for the body Markdown child.
+					// Visible thinking branch — prepend an inline "Thinking:" label
+					// to the body content (same line) and use a MUTED MarkdownTheme.
+					// The **bold** wrapper routes through the muted theme's `bold`
+					// hook so the label renders bolder than the surrounding prose.
+					// Trade-off: if the first line of content is a markdown heading
+					// or other block-level token, prepending inline prose flattens
+					// it. Acceptable: the label's inline placement is the goal.
 					const t = ensureTheme();
+					const labeled = `**Thinking:** ${content.thinking.trim()}`;
 					this.contentContainer.addChild(
-						new Text(t.italic(t.fg("accent", "Thinking")), 1, 0),
-					);
-					this.contentContainer.addChild(
-						new Markdown(content.thinking.trim(), 1, 0, ensureMuted(), {
+						new Markdown(labeled, 1, 0, ensureMuted(), {
 							color: (text: string) => t.fg("thinkingText", text),
 							italic: true,
 						}),
