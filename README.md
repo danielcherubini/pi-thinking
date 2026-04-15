@@ -9,13 +9,13 @@ Muted, themed rendering for thinking blocks in [pi](https://github.com/badlogic/
 Symlink or copy this folder into pi's global extensions directory:
 
 ```bash
-ln -s /home/daniel/Coding/Javascript/pi-thinking ~/.pi/agent/extensions/pi-thinking
+ln -s /path/to/pi-thinking ~/.pi/agent/extensions/pi-thinking
 ```
 
 Or add the entry path to `~/.pi/agent/settings.json`:
 
 ```json
-{ "extensions": ["/home/daniel/Coding/Javascript/pi-thinking/src/index.ts"] }
+{ "extensions": ["/path/to/pi-thinking/src/index.ts"] }
 ```
 
 ### Published
