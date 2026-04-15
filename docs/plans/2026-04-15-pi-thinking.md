@@ -179,11 +179,18 @@ export function rgbToHex(rgb: RGB): string  // returns "#rrggbb"
 export function rgbToHsl(rgb: RGB): HSL
 export function hslToRgb(hsl: HSL): RGB
 export function ansi256ToRgb(code: number): RGB  // handles 0-15, 16-231 (6x6x6 cube), 232-255 (greyscale ramp)
+export function parseAnsiFgToRgb(ansi: string): RGB | null
+  // Parses a foreground-color ANSI escape. Accepts both truecolor
+  // `\x1b[38;2;R;G;Bm` and 256-palette `\x1b[38;5;Nm`. Input may
+  // be the bare escape or a string that begins with one. Returns
+  // null if no recognized foreground code is found at the start.
 export function deriveDimColor(
   input: string | number,
   anchorLightness: number,
   saturationFactor?: number
 ): string  // returns "#rrggbb"
+export function rgbToTruecolorFg(rgb: RGB): string
+  // Returns the ANSI SGR prefix `\x1b[38;2;R;G;Bm`. Does not reset.
 ```
 
 `deriveDimColor` algorithm:
@@ -230,6 +237,12 @@ Edge cases:
   - `deriveDimColor("#ff0000", 0.3)` produces a hex whose HSL has `l ≤ 0.3` and `s = 0.5` (within epsilon)
   - `deriveDimColor("#888888", 0.5)` preserves low saturation (returns near-grey)
   - `deriveDimColor(196, 0.25)` accepts numeric ANSI input and produces `l ≤ 0.25`
+  - `parseAnsiFgToRgb("\x1b[38;2;229;229;231m")` returns `{r:229,g:229,b:231}`
+  - `parseAnsiFgToRgb("\x1b[38;5;196m")` returns a `{r,g,b}` equal to `ansi256ToRgb(196)`
+  - `parseAnsiFgToRgb("\x1b[38;5;196mhello")` parses the leading escape and returns RGB (trailing text is fine)
+  - `parseAnsiFgToRgb("\x1b[1mhello")` returns `null` (not a foreground color escape)
+  - `parseAnsiFgToRgb("")` returns `null`
+  - `rgbToTruecolorFg({r:255,g:0,b:0})` equals `"\x1b[38;2;255;0;0m"`
 - [ ] Run `bun test tests/hsl.test.ts`
   - Did it fail with "module not found" or all tests failing? If any pass, stop and investigate why.
 - [ ] Implement `src/hsl.ts` with all exported functions
@@ -276,49 +289,87 @@ export function buildMutedMarkdownTheme(
 ): MarkdownTheme
 ```
 
-**Palette B mapping** (applied inside `buildMutedMarkdownTheme`). For each markdown token the `MarkdownTheme` interface requires, produce a function that wraps the input text in the appropriate ANSI:
+**Research-confirmed `MarkdownTheme` shape** (from `docs/research/thinking-renderer.md` §7, verbatim from `/home/daniel/Coding/Javascript/pi-mono/packages/tui/src/components/markdown.ts:29–47`):
 
-| MarkdownTheme field | Color source | ANSI style additions |
+```ts
+export interface MarkdownTheme {
+    heading: (text: string) => string;
+    link: (text: string) => string;
+    linkUrl: (text: string) => string;
+    code: (text: string) => string;
+    codeBlock: (text: string) => string;
+    codeBlockBorder: (text: string) => string;
+    quote: (text: string) => string;
+    quoteBorder: (text: string) => string;
+    hr: (text: string) => string;
+    listBullet: (text: string) => string;
+    bold: (text: string) => string;
+    italic: (text: string) => string;
+    strikethrough: (text: string) => string;
+    underline: (text: string) => string;
+    highlightCode?: (code: string, lang?: string) => string[];
+    codeBlockIndent?: string;
+}
+```
+
+Note: pi-tui's `Markdown` also accepts a `DefaultTextStyle` for body prose — that styling is already handled by pi-mono's current renderer (`{ color: theme.fg("thinkingText", …), italic: true }`), so body prose does not need to be wrapped by this theme builder. This builder styles the *structural* tokens plus the fenced-code highlighter.
+
+**Palette B mapping** — for each required `MarkdownTheme` field, produce a function that wraps input text in the correct color + style:
+
+| Field | Color source | Additional ANSI |
 |---|---|---|
-| body text | `piTheme.fg("thinkingText", text)` | `\x1b[3m` (italic) prepended, `\x1b[0m` appended |
-| heading | `piTheme.fg("thinkingText", text)` | italic + `\x1b[1m` (bold) |
-| code (inline) | `piTheme.fg("dim", text)` | italic |
-| codeBlock content | (rendered via syntax tokens; see below) | — |
-| codeBlockBorder | `piTheme.fg("dim", text)` | — |
-| quote | `piTheme.fg("thinkingText", text)` | italic |
-| quoteBorder | `piTheme.fg("dim", text)` | — |
-| hr | `piTheme.fg("dim", text)` | — |
-| listBullet | `piTheme.fg("dim", text)` | — |
-| link | `piTheme.fg("thinkingText", text)` | italic + `\x1b[4m` (underline) |
-| linkUrl | `piTheme.fg("dim", text)` | — |
-| emphasis / bold | `piTheme.fg("thinkingText", text)` | italic + bold |
+| `heading` | `piTheme.fg("thinkingText", text)` | bold (`\x1b[1m` … `\x1b[22m`) |
+| `link` | `piTheme.fg("thinkingText", text)` | underline (`\x1b[4m` … `\x1b[24m`) |
+| `linkUrl` | `piTheme.fg("dim", text)` | — |
+| `code` | `piTheme.fg("dim", text)` | — |
+| `codeBlock` | `piTheme.fg("thinkingText", text)` | — (fallback for plain code-block text when no highlighter/lang) |
+| `codeBlockBorder` | `piTheme.fg("dim", text)` | — |
+| `quote` | `piTheme.fg("thinkingText", text)` | — |
+| `quoteBorder` | `piTheme.fg("dim", text)` | — |
+| `hr` | `piTheme.fg("dim", text)` | — |
+| `listBullet` | `piTheme.fg("dim", text)` | — |
+| `bold` | `piTheme.fg("thinkingText", text)` | bold |
+| `italic` | identity (return `text` unchanged) | — (the outer `DefaultTextStyle.italic` already italicizes body text; avoid double-wrapping that could leak styles past the thinking block) |
+| `strikethrough` | `piTheme.fg("dim", text)` | strikethrough (`\x1b[9m` … `\x1b[29m`) |
+| `underline` | `piTheme.fg("thinkingText", text)` | underline |
 
-**Syntax token mapping** for fenced code contents:
+The ANSI style "additional" columns must be emitted with explicit **off** SGR codes (`22`, `24`, `29`), not a blanket `\x1b[0m` reset — a full reset would clobber the `DefaultTextStyle` color wrapper applied by pi-tui around each returned string.
 
-For each syntax token field on `MarkdownTheme` (the authoritative list is captured in Task 1's research doc — the tokens *below* are a probable-but-unverified placeholder; if Task 1 records different names, use those instead): `syntaxComment`, `syntaxKeyword`, `syntaxFunction`, `syntaxVariable`, `syntaxString`, `syntaxNumber`, `syntaxType`, `syntaxOperator`, `syntaxPunctuation`.
+**`highlightCode` (muted syntax)** — this is the core of the dim syntax palette. The approach:
 
-For each such token:
+1. Import pi-coding-agent's `highlightCode` helper (confirmed exported from the root barrel — `/home/daniel/Coding/Javascript/pi-mono/packages/coding-agent/src/index.ts:343–352`): `import { highlightCode } from "@mariozechner/pi-coding-agent";`
+2. The field implementation calls `highlightCode(code, lang)` (which returns `string[]` — one highlighted line per entry) then walks each returned line and rewrites every foreground-color ANSI escape to its dimmed variant.
+3. Rewrite rule: find each occurrence of `\x1b[38;2;R;G;Bm` or `\x1b[38;5;Nm` in the line, decode via `parseAnsiFgToRgb`, pipe through `deriveDimColor(rgbAsHex, anchorLightness, saturationFactor)`, and emit the result as `\x1b[38;2;R';G';B'm`. Preserve non-color escapes (bold, italic, reset, etc.) unchanged.
+4. Cache the anchor lightness value and a small RGB → dimmed-ANSI-prefix memo (computed per `highlightCode` invocation or per theme build; see "Caching" below).
 
-1. Resolve the theme's configured color value for that token via the `Theme` color-resolution API identified in Task 1's research
-2. Resolve the theme's `thinkingText` color the same way; compute its lightness via `rgbToHsl`
-3. Call `deriveDimColor(tokenColor, thinkingTextLightness, saturationFactor)` to produce the muted hex
-4. Produce a function that wraps text in `\x1b[38;2;R;G;Bm<text>\x1b[0m` using that hex's RGB values
+This generic rewrite approach avoids enumerating individual syntax token fields — which is correct because `MarkdownTheme` does **not** have per-syntax-token fields. Instead, syntax colors flow through the unified `highlightCode` call and we dim them post-hoc.
 
-Cache the derived palette inside `buildMutedMarkdownTheme` — compute once per call, not per token invocation.
+**Anchor lightness:**
+
+1. Call `piTheme.getFgAnsi("thinkingText")` (returns the raw ANSI foreground escape — see research §8)
+2. Feed it to `parseAnsiFgToRgb`
+3. Convert RGB → HSL via `rgbToHsl`; take `.l` as the anchor
+
+**Caching:** Compute the anchor lightness **once** inside `buildMutedMarkdownTheme`. Inside the `highlightCode` implementation, use a `Map<string, string>` that memoizes raw ANSI escape → dimmed ANSI escape (keyed by the unmodified escape string). This keeps the hot path cheap — pi-mono's `updateContent` runs on every streaming chunk.
 
 **Do NOT:**
 - Do NOT hardcode color hex values. All colors derive from `piTheme`.
 - Do NOT special-case light vs dark themes. The derivation is uniform.
 - Do NOT implement fence delimiter collapsing. Fences stay visible (intentional pi-mono behavior).
+- Do NOT wrap `highlightCode` output in a full `\x1b[0m` reset — use targeted style-off codes where needed; the surrounding `DefaultTextStyle` wrapper from pi-tui must not be clobbered.
 
 **Steps:**
-- [ ] Create `tests/theme.test.ts` with failing tests using a stub `Theme` object that returns known values:
-  - Stub `piTheme.fg(token, text)` to return `[${token}]${text}[/]`, and stub color-resolution to return `#888888` for `thinkingText`, `#606060` for `dim`, `#4a90ff` for `syntaxKeyword`, `#00ff00` for `syntaxString`, `#808080` for `syntaxComment`
-  - Assert `buildMutedMarkdownTheme(stub).code("hi")` contains `[dim]` and `\x1b[3m` (italic ANSI)
-  - Assert `.heading("H", 1)` contains italic (`\x1b[3m`) and bold (`\x1b[1m`)
-  - Assert `.codeBlockBorder("\`\`\`")` contains `[dim]`
-  - Assert that applying the theme's `syntaxString` handler to text produces ANSI whose RGB has lightness ≤ the `thinkingText` lightness (0.53 for `#888888`)
-  - Assert that `syntaxComment` (originally `#808080`) does NOT become brighter than its original lightness (lightness clamped, never raised)
+- [ ] Create `tests/theme.test.ts` with failing tests using a stub `Theme` object (matches pi-mono's `Theme` surface for the bits we call):
+  - Stub `piTheme.fg(token, text)` to return `[${token}]${text}[/]`
+  - Stub `piTheme.getFgAnsi(token)` to return known truecolor ANSI strings: `"\x1b[38;2;136;136;136m"` for `thinkingText` (l ≈ 0.53), `"\x1b[38;2;96;96;96m"` for `dim`
+  - Assert `buildMutedMarkdownTheme(stub).code("hi")` returns `"[dim]hi[/]"` (inline code is dim)
+  - Assert `.heading("H")` contains `[thinkingText]` and the bold SGR `\x1b[1m` with a matching `\x1b[22m` off-code (no `\x1b[0m` full reset)
+  - Assert `.codeBlockBorder("\`\`\`")` returns `"[dim]\`\`\`[/]"`
+  - Assert `.italic("x")` returns `"x"` unchanged (identity — avoids double-wrapping)
+  - Assert `.listBullet("-")` contains `[dim]`
+  - `highlightCode` tests: mock `@mariozechner/pi-coding-agent`'s `highlightCode` export to return a line containing a truecolor escape — e.g. `"\x1b[38;2;74;144;255mfn\x1b[0m foo"`. After `buildMutedMarkdownTheme(stub).highlightCode!(...)` processes it, assert the leading escape has been rewritten to a new truecolor escape whose decoded RGB → HSL has `l ≤ 0.53` (the anchor) and `s = 0.5 × originalS` (within epsilon 0.02). Non-color escapes (`\x1b[0m` in the tail) are preserved verbatim.
+  - Assert that a synthetic line containing a dark syntax color (e.g. `"\x1b[38;2;128;128;128m// comment"`) is NOT brightened — the rewritten lightness is `min(origL, anchorL)`, so it stays ≤ original.
+  - Assert that the 256-palette variant `"\x1b[38;5;196mkeyword\x1b[0m"` is also rewritten (parser handles both truecolor and 256-palette forms).
 - [ ] Run `bun test tests/theme.test.ts`
   - Did it fail? If any pass, stop and investigate.
 - [ ] Implement `src/theme.ts`
@@ -329,9 +380,10 @@ Cache the derived palette inside `buildMutedMarkdownTheme` — compute once per 
 - [ ] Commit with message: `feat: muted markdown theme builder with derived dim palette`
 
 **Acceptance criteria:**
-- [ ] `buildMutedMarkdownTheme(piTheme)` returns an object conforming to pi-tui's `MarkdownTheme` interface (exact fields per Task 1 research)
-- [ ] Every syntax-token color in the output has lightness ≤ `thinkingText` lightness
+- [ ] `buildMutedMarkdownTheme(piTheme)` returns an object conforming to pi-tui's `MarkdownTheme` interface with all required fields plus `highlightCode`
+- [ ] Every truecolor/256-palette foreground escape emerging from `highlightCode` has lightness ≤ `thinkingText` lightness
 - [ ] All colors derive from the input theme (no hardcoded hex)
+- [ ] No `\x1b[0m` full resets emitted (only targeted style-off codes `22`/`24`/`29`)
 - [ ] All tests pass; typecheck passes
 
 ---
@@ -339,48 +391,56 @@ Cache the derived palette inside `buildMutedMarkdownTheme` — compute once per 
 ### Task 5: Patch the thinking block renderer
 
 **Context:**
-With the muted theme available, we intercept pi-mono's thinking block rendering. Per Task 1's research, we monkey-patch the identified renderer class's render method, constructing a `Markdown` component with our muted theme and prepending a themed `"Thinking:"` label. The original `block.thinking` string is never mutated — canonical state stays clean, context sanitization is unnecessary, and session reloads render correctly every pass.
+With the muted theme available, we intercept pi-mono's thinking block rendering. Per Task 1's research (§1, §6, §9), **there is no dedicated thinking renderer class**. Thinking blocks are rendered inline inside `AssistantMessageComponent.updateContent` (at `assistant-message.ts:78–104`) by constructing a pi-tui `Markdown` child with `this.markdownTheme` and a `DefaultTextStyle` that dims body text only. Structural markdown tokens in that `Markdown` use the full-saturation shared theme — that's the contrast bug.
 
-**Verdict branching** — execute the branch matching Task 1's verdict. Do not implement multiple paths:
-- **B1** (class, publicly re-exported): patch `ThinkingRenderer.prototype.render` via the public import. Use the static top-level import shown below.
-- **B2** (class, deep import only): patch via the deep import path recorded in research. Add a one-line code comment citing the research doc so future readers know why a deep path was chosen.
-- **B3** (exported function): patch by re-binding the function on the module namespace object. Confirm at runtime that the rebinding holds; if it does not (the import was a snapshot), escalate back to the user before proceeding — do not silently fall through to B4.
-- **B4** (not exported): abandon this file's approach. Rewrite this task to use string mutation with a `WeakMap` stash and `context` sanitization — the research doc dictates the hook shape.
+Patch target: `AssistantMessageComponent.prototype.updateContent`. The muted `MarkdownTheme` must apply **only** to the `thinking` branch — the `text` branch (regular assistant prose) reads the same `this.markdownTheme` field and must remain unmuted. A naive field swap mutes both; therefore we reimplement the method body and inject the muted theme solely into the thinking-branch `Markdown` constructor. The original `content.thinking` string is never mutated — canonical state stays clean, context sanitization is unnecessary, and session reloads render correctly every pass.
 
-**Ordering note:** `patchThinkingRenderer` must complete before the first thinking block renders. Prefer a static top-level import of the renderer over `import(...).then(...)` so the patch is synchronous from the caller's perspective. This avoids the race that a deferred dynamic import would introduce.
+**Verdict from Task 1: B1** — `AssistantMessageComponent` is publicly re-exported from `@mariozechner/pi-coding-agent`, is a class with a regular prototype method to patch, and mirrors pi-pane's validated `UserMessageComponent` precedent. No B2/B3/B4 fallback required.
+
+**Ordering note:** `patchThinkingRenderer` must complete before the first thinking block renders. Use a static top-level import of `AssistantMessageComponent` so the patch is synchronous from the caller's perspective — no `import(...).then(...)` race window.
 
 **Files:**
 - Create: `src/patch.ts`
 - Create: `tests/patch.test.ts`
 
-**What to implement (Approach B path):**
+**What to implement:**
 
-`src/patch.ts` exports:
+`src/patch.ts`:
 ```ts
-import type { Theme } from "@mariozechner/pi-coding-agent";
-// Static import of the thinking renderer class from the import path recorded in Task 1 research.
-// Example shape (replace with the actual symbol/path from research):
-//   import { ThinkingBlockRenderer } from "@mariozechner/pi-coding-agent";
+import { AssistantMessageComponent, type Theme } from "@mariozechner/pi-coding-agent";
+import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
+import { buildMutedMarkdownTheme } from "./theme.js";
 
-export const PATCH_GUARD = Symbol.for("pi-thinking:patched");
+export const PATCH_GUARD = Symbol.for("pi-thinking:assistantMsgPatched");
 
 export function patchThinkingRenderer(getTheme: () => Theme): void
 ```
 
 The function:
-1. Reads the thinking renderer class from the top-level static import (no `import(...).then(...)`)
-2. Checks `(ThinkingRenderer as any)[PATCH_GUARD]` — if truthy, return immediately (idempotent)
-3. Marks `(ThinkingRenderer as any)[PATCH_GUARD] = true`
-4. Replaces `ThinkingRenderer.prototype.render` with a wrapper that:
-   - Reads the thinking string from `this` (exact field name from Task 1 research)
-   - If the thinking string is empty, returns `[]`
-   - Builds a muted theme via `buildMutedMarkdownTheme(getTheme())`
-   - Constructs a pi-tui `Markdown` instance using the constructor signature confirmed in Task 1 research (e.g., `new Markdown(thinking, 0, 0, mutedTheme)`)
-   - Renders it at the given width to produce `bodyLines: string[]`
-   - Emits the label as a **standalone line** — `labelLine = getTheme().fg("accent", "Thinking:")` — regardless of whether the original renderer merged labels into the first body line. Rationale: a dedicated label line is simpler to test, avoids alignment issues with body indentation, and matches the visual spec.
-   - Returns `[labelLine, ...bodyLines]`
 
-The original render is NOT stashed — the `PATCH_GUARD` symbol alone prevents double-patching, and no code path needs to call the original.
+1. Checks `(AssistantMessageComponent as any)[PATCH_GUARD]` — if truthy, return immediately (idempotent)
+2. Marks `(AssistantMessageComponent as any)[PATCH_GUARD] = true`
+3. Replaces `AssistantMessageComponent.prototype.updateContent` with a reimplementation that copies the original body (see research §1 for the exact source at `/home/daniel/Coding/Javascript/pi-mono/packages/coding-agent/src/modes/interactive/components/assistant-message.ts:57–…`) and differs in exactly one place: the `content.type === "thinking"` branch constructs its `Markdown` with a **muted theme** and prepends a **standalone label line** above it.
+
+Concrete per-branch behavior:
+- **`content.type === "text"` branch**: behave exactly as the original — use `this.markdownTheme` (unmuted) and existing prose styling.
+- **`content.type === "thinking"` and not hidden**: 
+  - Prepend a `Text` child with the themed label: `const theme = getTheme(); const label = new Text(theme.italic(theme.fg("accent", "Thinking")), 1, 0);` — standalone line, not merged into body.
+  - Then append the `Markdown` child as today BUT with the muted theme: `new Markdown(content.thinking.trim(), 1, 0, buildMutedMarkdownTheme(theme), { color: (text) => theme.fg("thinkingText", text), italic: true })`
+  - Preserve the existing trailing `Spacer(1)` logic (only when a visible content block follows).
+- **`content.type === "thinking"` and hidden**: behave exactly as the original (only the static `"Thinking..."` `Text` is shown; no body to mute). Do not add the label — the hidden-label already serves as one.
+- **All other branches** (tool calls, images, etc.): behave exactly as the original. The safest way to achieve this is to literally copy the original method body and only modify the two subcases noted above. Do NOT try to call the original and post-process its children — the hot path runs on every streaming chunk and children aren't easily introspectable.
+
+**Performance:** `updateContent` runs on every streaming chunk (per research §4 / `interactive-mode.ts:2401`). To keep the hot path cheap:
+- Build the muted theme once per call to `updateContent` (not per content item).
+- Rely on `buildMutedMarkdownTheme`'s internal memoization (spec'd in Task 4) for its per-ANSI cache.
+
+**Shape-fragility defense:** pi-mono's `updateContent` internals could change. At patch time, assert at least these invariants — if any fail, skip patching and `console.warn` with a clear message (allowing pi to keep working unmuted rather than crashing):
+- `typeof AssistantMessageComponent.prototype.updateContent === "function"`
+- `(AssistantMessageComponent as any).name === "AssistantMessageComponent"`
+- The original source (accessed via `.toString()`) contains both substrings `content.type === "thinking"` and `this.markdownTheme`
+
+The original method is NOT stashed — the `PATCH_GUARD` symbol prevents double-patching, and no code path needs to call the original.
 
 **Do NOT:**
 - Do NOT mutate `block.thinking` or any stored content
@@ -388,12 +448,13 @@ The original render is NOT stashed — the `PATCH_GUARD` symbol alone prevents d
 - Do NOT implement the Approach A fallback unless Task 1 requires it
 
 **Steps:**
-- [ ] Create `tests/patch.test.ts` with failing integration tests using a minimal stub renderer class and stub theme:
-  - Define `class StubThinking { thinking = "hello"; render(w: number) { return ["original"]; } }`
-  - Patch a reference to this class via a test-only helper (the patch module should expose an internal `patchTarget(targetClass, getTheme)` for testability OR the test imports and patches directly — decide during implementation)
-  - After patching, `new StubThinking().render(80)` should return lines where the first line contains `"Thinking:"`
-  - Calling the patch twice on the same class is a no-op (render result unchanged between first and second patch call)
-  - When `thinking = ""`, render returns `[]`
+- [ ] Create `tests/patch.test.ts` with tests that DON'T require a live pi-mono module — instead expose an internal, test-only overload `patchTarget(targetClass, getTheme)` in `src/patch.ts` that accepts any class-with-`updateContent`. The public `patchThinkingRenderer` wraps `patchTarget(AssistantMessageComponent, getTheme)`. Tests use `patchTarget` on a stub:
+  - Stub `class StubAssistant { markdownTheme = {}; contentContainer = { children: [] as any[], addChild(c: any) { this.children.push(c); } }; updateContent(msg: any) { /* mirrors the real branch logic on msg.content[] */ } }`
+  - Stub `getTheme` to return a minimal `Theme`-shaped object with `fg`, `italic`, and `getFgAnsi` methods the patched method needs
+  - After `patchTarget(StubAssistant, getTheme)`, feeding a message with a thinking content item results in `contentContainer.children` that (a) begins with a label child whose rendered text contains `"Thinking"`, and (b) includes a `Markdown`-like child constructed with the muted theme (detect by inspecting the 4th constructor arg)
+  - Feeding a text content item produces a `Markdown` child built with the ORIGINAL `markdownTheme` (not the muted one) — regression guard on the text branch
+  - Calling `patchTarget` twice on the same class is a no-op (second call returns without re-wrapping; the class's `updateContent` reference is unchanged)
+  - When the thinking content is empty/whitespace, no children are added (matches pi-mono's existing `.trim()` guard)
 - [ ] Run `bun test tests/patch.test.ts`
   - Did it fail? If any pass, stop and investigate.
 - [ ] Implement `src/patch.ts` per Task 1's patch target
@@ -405,8 +466,10 @@ The original render is NOT stashed — the `PATCH_GUARD` symbol alone prevents d
 
 **Acceptance criteria:**
 - [ ] `patchThinkingRenderer` is idempotent (second call is a no-op guarded by `PATCH_GUARD`)
-- [ ] Patched render produces themed label + muted markdown body
-- [ ] Original `block.thinking` string is never mutated anywhere in this module
+- [ ] Patched `updateContent` produces, for the thinking branch: one label child + one muted-theme `Markdown` child (+ optional trailing `Spacer`)
+- [ ] Text branch still uses the original (unmuted) `this.markdownTheme`
+- [ ] Original `content.thinking` string is never mutated anywhere in this module
+- [ ] Shape-fragility defense asserts fire on malformed targets (test coverage) and downgrade to a no-op with `console.warn`
 - [ ] Tests pass; typecheck passes
 
 ---
