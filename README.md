@@ -8,11 +8,23 @@
 
 ## Visuals
 
-![Thinking block rendering 2](docs/screenshots/screenshot2.png)
 ![Thinking block rendering 1](docs/screenshots/screenshot1.png)
+![Thinking block rendering 2](docs/screenshots/screenshot2.png)
 ![Thinking block rendering 3](docs/screenshots/screenshot3.png)
 
 ## Installation
+
+### Using npm (Recommended)
+
+```bash
+pi install npm:pi-thinking
+```
+
+### Using Git
+
+```bash
+pi install git:github.com/danielcherubini/pi-thinking
+```
 
 ### Local development
 
@@ -26,18 +38,6 @@ Or add the entry path to `~/.pi/agent/settings.json`:
 
 ```json
 { "extensions": ["/path/to/pi-thinking/src/index.ts"] }
-```
-
-### Published
-
-```bash
-pi install git:github.com/danielcherubini/pi-thinking
-```
-
-Or via npm:
-
-```bash
-pi install npm:pi-thinking
 ```
 
 ## Requirements
