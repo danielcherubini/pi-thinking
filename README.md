@@ -1,5 +1,8 @@
 # pi-thinking
 
+[![npm version](https://img.shields.io/npm/v/pi-thinking.svg)](https://www.npmjs.com/package/pi-thinking)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 > [!NOTE]
 > Muted, themed rendering for thinking blocks in [pi](https://github.com/badlogic/pi-mono) — calmer colors, dim syntax highlighting inside fenced code, and a themed `"Thinking"` label.
 
