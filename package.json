@@ -1,7 +1,11 @@
 {
   "name": "pi-thinking",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Muted, themed rendering for thinking blocks in pi.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/danielcherubini/pi-thinking.git"
+  },
   "type": "module",
   "license": "MIT",
   "keywords": [

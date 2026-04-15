@@ -116,11 +116,11 @@ describe("patchTarget: thinking branch", () => {
 		//   - the body text
 		const md = children.find((c: any) => isMarkdown(c));
 		expect(md).toBeDefined();
-		expect(md.text).toContain("[accent]Thinking:[/]");
+		expect(md.text).toContain("[accent]Thinking...\n\n[/]");
 		expect(md.text).toContain("\x1b[38;2;136;136;136m"); // thinkingText re-emit
 		expect(md.text).toContain("hello");
 		// Label must precede the body
-		expect(md.text.indexOf("[accent]Thinking:[/]")).toBeLessThan(
+		expect(md.text.indexOf("[accent]Thinking...\n\n[/]")).toBeLessThan(
 			md.text.indexOf("hello"),
 		);
 		expect(md.theme).not.toBe(ORIGINAL_THEME);

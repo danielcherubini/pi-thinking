@@ -118,8 +118,8 @@ export function patchTarget(
 						this.contentContainer.addChild(new Spacer(1));
 					}
 				} else {
-					// Visible thinking branch — prepend an inline "Thinking:" label
-					// in ACCENT color to the body content (same line) and use a
+					// Visible thinking branch — prepend a "Thinking..." label
+					// on its own line to the body content and use a
 					// MUTED MarkdownTheme for the whole paragraph.
 					//
 					// Technique (borrowed from pi-tool-display): embed raw ANSI for
@@ -133,9 +133,9 @@ export function patchTarget(
 					// or other block-level token, prepending inline prose flattens
 					// it. Acceptable — the inline label is the goal.
 					const t = ensureTheme();
-					const labelAnsi = t.fg("accent", "Thinking:");
+					const labelAnsi = t.fg("accent", "Thinking...\n\n");
 					const bodyColorAnsi = t.getFgAnsi("thinkingText");
-					const labeled = `${labelAnsi}${bodyColorAnsi} ${content.thinking.trim()}`;
+					const labeled = `${labelAnsi}${bodyColorAnsi}${content.thinking.trim()}`;
 					this.contentContainer.addChild(
 						new Markdown(labeled, 1, 0, ensureMuted(), {
 							color: (text: string) => t.fg("thinkingText", text),

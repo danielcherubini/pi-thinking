@@ -98,7 +98,7 @@ export function buildMutedMarkdownTheme(
     piTheme.fg(token as Parameters<Theme["fg"]>[0], text);
 
   return {
-    heading: (text) => `\x1b[1m${fg("thinkingText", text)}\x1b[22m`,
+    heading: (text) => `\x1b[1m${rgbToTruecolorFg(hexToRgb("#FFD700"))}${text}\x1b[39m\x1b[22m`,
     link: (text) => `\x1b[4m${fg("thinkingText", text)}\x1b[24m`,
     linkUrl: (text) => fg("dim", text),
     code: (text) => fg("dim", text),
@@ -108,8 +108,8 @@ export function buildMutedMarkdownTheme(
     quoteBorder: (text) => fg("dim", text),
     hr: (text) => fg("dim", text),
     listBullet: (text) => fg("dim", text),
-    bold: (text) => `\x1b[1m${fg("thinkingText", text)}\x1b[22m`,
-    italic: (text) => text,
+    bold: (text) => `\x1b[1m${rgbToTruecolorFg(hexToRgb("#FFD700"))}${text}\x1b[39m\x1b[22m`,
+    italic: (text) => `\x1b[3m${text}\x1b[23m`,
     strikethrough: (text) => `\x1b[9m${fg("dim", text)}\x1b[29m`,
     underline: (text) => `\x1b[4m${fg("thinkingText", text)}\x1b[24m`,
     highlightCode: (code, lang) => {
