@@ -84,6 +84,7 @@ function makeStubAssistant() {
 function makeStubTheme() {
 	return {
 		fg: (token: string, text: string) => `[${token}]${text}[/]`,
+		bold: (text: string) => `<b>${text}</b>`,
 		italic: (text: string) => `<i>${text}</i>`,
 		getFgAnsi: (token: string) =>
 			token === "thinkingText"
@@ -117,11 +118,11 @@ describe("patchTarget: thinking branch", () => {
 		//   - the body text
 		const md = children.find((c: any) => isMarkdown(c));
 		expect(md).toBeDefined();
-		expect(md.text).toContain("[accent]Thinking...\n\n[/]");
+		expect(md.text).toContain("[accent]<b>Thinking...</b>[/]");
 		expect(md.text).toContain("\x1b[38;2;136;136;136m"); // thinkingText re-emit
 		expect(md.text).toContain("hello");
 		// Label must precede the body
-		expect(md.text.indexOf("[accent]Thinking...\n\n[/]")).toBeLessThan(
+		expect(md.text.indexOf("[accent]<b>Thinking...</b>[/]")).toBeLessThan(
 			md.text.indexOf("hello"),
 		);
 		expect(md.theme).not.toBe(ORIGINAL_THEME);
