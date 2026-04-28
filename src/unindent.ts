@@ -18,7 +18,7 @@
  * - If one line has 0 indent and others have N indent, nothing is stripped
  *   (minIndent === 0). This is standard textwrap.dedent behavior.
  * - Fenced code blocks using 4+ backticks may be misparsed. The regex uses a
- *   negative lookahead to reject 4+ backtick openings (`/^(\`\`\`(?!\`))/
+ *   negative lookahead to reject 4+ backtick openings (`/^(```(?!`))/
  * - Line endings in the output are always `\n` (CRLF input is normalized).
  */
 export function unindentCodeBlocks(text: string): string {
@@ -30,7 +30,7 @@ export function unindentCodeBlocks(text: string): string {
 	// Group 2: language tag (may be empty)
 	// Group 3: block content (everything between fences)
 	// Group 4: closing fence
-	const regex = /^(\`\`\`(?!\`))([^\n]*)\n([\s\S]*?)^(\`\`\`(?!\`))[ \t]*$/gm;
+	const regex = /^(```(?!`))([^\n]*)\n([\s\S]*?)^(```(?!`))[ \t]*$/gm;
 
 	return text.replace(regex, (match, opening, lang, content, closing) => {
 		const lines = content.split("\n");
