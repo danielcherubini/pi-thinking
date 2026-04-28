@@ -139,7 +139,7 @@ export function patchTarget(
 					// or other block-level token, prepending inline prose flattens
 					// it. Acceptable — the inline label is the goal.
 					const t = ensureTheme();
-					const labelAnsi = t.fg("accent", "Thinking...\n\n");
+					const labelAnsi = t.fg("accent", t.bold("Thinking...")) + "\n\n";
 					const bodyColorAnsi = t.getFgAnsi("thinkingText");
 					const labeled = `${labelAnsi}${bodyColorAnsi}${unindentCodeBlocks(content.thinking.trim())}`;
 					this.contentContainer.addChild(
