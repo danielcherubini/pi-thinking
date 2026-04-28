@@ -98,6 +98,7 @@ export function buildMutedMarkdownTheme(
     piTheme.fg(token as Parameters<Theme["fg"]>[0], text);
 
   return {
+    codeBlockIndent: "",
     heading: (text) => `\x1b[1m${rgbToTruecolorFg(hexToRgb("#FFD700"))}${text}\x1b[39m\x1b[22m`,
     link: (text) => `\x1b[4m${fg("thinkingText", text)}\x1b[24m`,
     linkUrl: (text) => fg("dim", text),

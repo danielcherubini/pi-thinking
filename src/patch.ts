@@ -64,6 +64,11 @@ export function patchTarget(
 	targetClass.prototype.updateContent = function (message: any): void {
 		this.lastMessage = message;
 
+		// Remove the Markdown component's default 2-space code block indent.
+		// Combined with unindentCodeBlocks this gives zero-pad code blocks
+		// that copy cleanly from the terminal.
+		this.markdownTheme.codeBlockIndent = "";
+
 		// Clear content container. Real pi-mono calls `.clear()`; the stub uses
 		// the same method name so we can call it either way.
 		this.contentContainer.clear();
