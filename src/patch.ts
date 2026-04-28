@@ -4,6 +4,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import { Markdown, type MarkdownTheme, Spacer, Text } from "@mariozechner/pi-tui";
 import { buildMutedMarkdownTheme } from "./theme.js";
+import { unindentCodeBlocks } from "./unindent.js";
 
 export const PATCH_GUARD = Symbol.for("pi-thinking:assistantMsgPatched");
 
@@ -97,7 +98,7 @@ export function patchTarget(
 			if (content.type === "text" && content.text.trim()) {
 				// Regular assistant text — preserve original (unmuted) theme.
 				this.contentContainer.addChild(
-					new Markdown(content.text.trim(), 1, 0, this.markdownTheme),
+					new Markdown(unindentCodeBlocks(content.text.trim()), 1, 0, this.markdownTheme),
 				);
 			} else if (content.type === "thinking" && content.thinking.trim()) {
 				const hasVisibleContentAfter = message.content
@@ -135,7 +136,7 @@ export function patchTarget(
 					const t = ensureTheme();
 					const labelAnsi = t.fg("accent", "Thinking...\n\n");
 					const bodyColorAnsi = t.getFgAnsi("thinkingText");
-					const labeled = `${labelAnsi}${bodyColorAnsi}${content.thinking.trim()}`;
+					const labeled = `${labelAnsi}${bodyColorAnsi}${unindentCodeBlocks(content.thinking.trim())}`;
 					this.contentContainer.addChild(
 						new Markdown(labeled, 1, 0, ensureMuted(), {
 							color: (text: string) => t.fg("thinkingText", text),

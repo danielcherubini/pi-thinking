@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { patchTarget, PATCH_GUARD } from "../src/patch";
+import { unindentCodeBlocks } from "../src/unindent.js";
 
 // ---------------------------------------------------------------------------
 // Stubs: mirror the pi-mono AssistantMessageComponent enough for patchTarget
@@ -187,5 +188,43 @@ describe("patchTarget: thinking branch", () => {
 		const after = Stub.prototype.updateContent;
 		expect(after).toBe(before);
 		expect((Stub as any)[PATCH_GUARD]).toBeFalsy();
+	});
+
+	test("Test 7: text branch unindents code blocks", () => {
+		const Stub = makeStubAssistant();
+		patchTarget(Stub, makeStubTheme, { skipShapeCheck: true });
+		const inst = new Stub();
+		const codeInput =
+			"Here's code:\n```js\n  const x = 1;\n  const y = 2;\n```\nDone.";
+		inst.updateContent({ content: [{ type: "text", text: codeInput }] });
+
+		const md = inst.contentContainer.children.find((c: any) => isMarkdown(c));
+		expect(md).toBeDefined();
+		// The indented code should be unindented
+		expect(md.text).toContain("const x = 1;");
+		expect(md.text).toContain("const y = 2;");
+		// The 2-space indented version should NOT be present
+		expect(md.text).not.toContain("  const x = 1;");
+		expect(md.text).not.toContain("  const y = 2;");
+		// Prose outside the code block should be preserved
+		expect(md.text).toContain("Here's code:");
+		expect(md.text).toContain("Done.");
+	});
+
+	test("Test 8: thinking branch unindents code blocks", () => {
+		const Stub = makeStubAssistant();
+		patchTarget(Stub, makeStubTheme, { skipShapeCheck: true });
+		const inst = new Stub();
+		const thinkingInput = "```js\n  const x = 1;\n```";
+		inst.updateContent({ content: [{ type: "thinking", thinking: thinkingInput }] });
+
+		const md = inst.contentContainer.children.find((c: any) => isMarkdown(c));
+		expect(md).toBeDefined();
+		// The indented code should be unindented
+		expect(md.text).toContain("const x = 1;");
+		expect(md.text).not.toContain("  const x = 1;");
+		// The Thinking... label and ANSI codes should still be present
+		expect(md.text).toContain("Thinking...");
+		expect(md.text).toContain("\x1b[38;2;136;136;136m"); // thinkingText re-emit
 	});
 });
