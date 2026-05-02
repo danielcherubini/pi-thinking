@@ -1,6 +1,6 @@
 {
   "name": "pi-thinking",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "Muted, themed rendering for thinking blocks in pi.",
   "repository": {
     "type": "git",
