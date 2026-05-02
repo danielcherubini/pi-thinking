@@ -1,12 +1,15 @@
+import type { Theme } from "@mariozechner/pi-coding-agent";
 import {
 	AssistantMessageComponent,
-	type Theme,
 } from "@mariozechner/pi-coding-agent";
-import { Markdown, type MarkdownTheme, Spacer, Text } from "@mariozechner/pi-tui";
+import { Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { buildMutedMarkdownTheme } from "./theme.js";
-import { unindentCodeBlocks } from "./unindent.js";
 
 export const PATCH_GUARD = Symbol.for("pi-thinking:assistantMsgPatched");
+
+// The label we prepend to visible thinking content.
+// Kept here so updateContent can check idempotency.
+const THINKING_LABEL = "\x1b[1m\x1b[38;2;255;215;0mThinking...\x1b[39m\x1b[22m";
 
 interface PatchOptions {
 	skipShapeCheck?: boolean;
@@ -15,7 +18,10 @@ interface PatchOptions {
 /**
  * Public patch entry point. Idempotently rewrites
  * `AssistantMessageComponent.prototype.updateContent` so that thinking blocks
- * render with a muted `MarkdownTheme` and a prepended "Thinking" label line.
+ * render with a muted `MarkdownTheme`.
+ *
+ * Content transforms (unindent, label) are handled by the `message_end` event
+ * hook in the extension entry point — this module only swaps the theme.
  */
 export function patchThinkingRenderer(getTheme: () => Theme): void {
 	patchTarget(AssistantMessageComponent, getTheme);
@@ -65,12 +71,11 @@ export function patchTarget(
 		this.lastMessage = message;
 
 		// Remove the Markdown component's default 2-space code block indent.
-		// Combined with unindentCodeBlocks this gives zero-pad code blocks
-		// that copy cleanly from the terminal.
+		// Combined with unindentCodeBlocks in message_end this gives zero-pad
+		// code blocks that copy cleanly from the terminal.
 		this.markdownTheme.codeBlockIndent = "";
 
-		// Clear content container. Real pi-mono calls `.clear()`; the stub uses
-		// the same method name so we can call it either way.
+		// Clear content container.
 		this.contentContainer.clear();
 
 		const hasVisibleContent = message.content.some(
@@ -86,13 +91,13 @@ export function patchTarget(
 		// Lazy per-invocation muted theme: built once when the first thinking
 		// block is seen, reused for every subsequent thinking block within this
 		// updateContent call.
-		let mutedTheme: MarkdownTheme | undefined;
+		let mutedTheme: ReturnType<typeof buildMutedMarkdownTheme> | undefined;
 		let theme: Theme | undefined;
 		const ensureTheme = (): Theme => {
 			if (!theme) theme = getTheme();
 			return theme;
 		};
-		const ensureMuted = (): MarkdownTheme => {
+		const ensureMuted = () => {
 			if (!mutedTheme) mutedTheme = buildMutedMarkdownTheme(ensureTheme());
 			return mutedTheme;
 		};
@@ -103,7 +108,7 @@ export function patchTarget(
 			if (content.type === "text" && content.text.trim()) {
 				// Regular assistant text — preserve original (unmuted) theme.
 				this.contentContainer.addChild(
-					new Markdown(unindentCodeBlocks(content.text.trim()), 1, 0, this.markdownTheme),
+					new Markdown(content.text.trim(), 1, 0, this.markdownTheme),
 				);
 			} else if (content.type === "thinking" && content.thinking.trim()) {
 				const hasVisibleContentAfter = message.content
@@ -124,26 +129,16 @@ export function patchTarget(
 						this.contentContainer.addChild(new Spacer(1));
 					}
 				} else {
-					// Visible thinking branch — prepend a "Thinking..." label
-					// on its own line to the body content and use a
-					// MUTED MarkdownTheme for the whole paragraph.
-					//
-					// Technique (borrowed from pi-tool-display): embed raw ANSI for
-					// the label, then re-emit the body color escape immediately
-					// after the label's `\x1b[39m` reset. Otherwise the fg reset
-					// inside the label wipes the Markdown component's default
-					// thinkingText color and the body prose would render in the
-					// terminal's default white.
-					//
-					// Trade-off: if the first line of content is a markdown heading
-					// or other block-level token, prepending inline prose flattens
-					// it. Acceptable — the inline label is the goal.
+					// Visible thinking branch — prepend "Thinking..." label if not
+					// already present (idempotent: works during streaming and after
+					// message_end unindent). Render with MUTED MarkdownTheme.
+					let thinkingContent = content.thinking.trim();
+					if (!thinkingContent.startsWith(THINKING_LABEL)) {
+						thinkingContent = `${THINKING_LABEL}\n\n${thinkingContent}`;
+					}
 					const t = ensureTheme();
-					const labelAnsi = t.fg("accent", t.bold("Thinking...")) + "\n\n";
-					const bodyColorAnsi = t.getFgAnsi("thinkingText");
-					const labeled = `${labelAnsi}${bodyColorAnsi}${unindentCodeBlocks(content.thinking.trim())}`;
 					this.contentContainer.addChild(
-						new Markdown(labeled, 1, 0, ensureMuted(), {
+						new Markdown(thinkingContent, 1, 0, ensureMuted(), {
 							color: (text: string) => t.fg("thinkingText", text),
 							italic: true,
 						}),

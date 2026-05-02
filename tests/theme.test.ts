@@ -43,13 +43,13 @@ describe("buildMutedMarkdownTheme: field mappings", () => {
     expect(t.code("hi")).toBe("[dim]hi[/]");
   });
 
-  test(".heading wraps in [thinkingText] with bold on/off SGR, no full reset", () => {
+  test(".heading uses hardcoded gold (#FFD700) with bold on/off SGR", () => {
     const t = buildMutedMarkdownTheme(makeStubTheme());
     const out = t.heading("H");
-    expect(out).toContain("[thinkingText]H[/]");
-    expect(out).toContain("\x1b[1m");
-    expect(out).toContain("\x1b[22m");
-    expect(out).not.toContain("\x1b[0m");
+    expect(out).toContain("\x1b[38;2;255;215;0m"); // gold truecolor
+    expect(out).toContain("\x1b[1m");             // bold on
+    expect(out).toContain("\x1b[22m");            // bold off
+    expect(out).not.toContain("\x1b[0m");         // no full reset
   });
 
   test(".codeBlockBorder wraps in [dim]", () => {
@@ -57,9 +57,10 @@ describe("buildMutedMarkdownTheme: field mappings", () => {
     expect(t.codeBlockBorder("```")).toBe("[dim]```[/]");
   });
 
-  test(".italic returns text unchanged", () => {
+  test(".italic wraps text in italic on/off SGR", () => {
     const t = buildMutedMarkdownTheme(makeStubTheme());
-    expect(t.italic("x")).toBe("x");
+    const out = t.italic("x");
+    expect(out).toBe("\x1b[3mx\x1b[23m");
   });
 
   test(".listBullet wraps in [dim]", () => {
@@ -101,13 +102,13 @@ describe("buildMutedMarkdownTheme: field mappings", () => {
     expect(t.hr("---")).toBe("[dim]---[/]");
   });
 
-  test(".bold wraps in [thinkingText] with bold on/off SGR", () => {
+  test(".bold uses hardcoded gold (#FFD700) with bold on/off SGR", () => {
     const t = buildMutedMarkdownTheme(makeStubTheme());
     const out = t.bold("B");
-    expect(out).toContain("[thinkingText]B[/]");
-    expect(out).toContain("\x1b[1m");
-    expect(out).toContain("\x1b[22m");
-    expect(out).not.toContain("\x1b[0m");
+    expect(out).toContain("\x1b[38;2;255;215;0m"); // gold truecolor
+    expect(out).toContain("\x1b[1m");             // bold on
+    expect(out).toContain("\x1b[22m");            // bold off
+    expect(out).not.toContain("\x1b[0m");         // no full reset
   });
 
   test(".strikethrough wraps in [dim] with strikethrough on/off", () => {

@@ -1,12 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { patchTarget, PATCH_GUARD } from "../src/patch";
-import { unindentCodeBlocks } from "../src/unindent.js";
+import { buildMutedMarkdownTheme } from "../src/theme";
 
 // ---------------------------------------------------------------------------
 // Stubs: mirror the pi-mono AssistantMessageComponent enough for patchTarget
 // to exercise the thinking/text branches without importing the real class.
-// The patched method constructs real pi-tui `Markdown` / `Text` / `Spacer`
-// instances, so we introspect via `constructor.name` and instance fields.
 // ---------------------------------------------------------------------------
 
 const ORIGINAL_THEME = { __original: true };
@@ -26,7 +24,6 @@ class StubContentContainer {
 }
 
 function makeStubAssistant() {
-	// Factory so each test gets a fresh class (so PATCH_GUARD doesn't bleed).
 	return class StubAssistant {
 		markdownTheme: any = ORIGINAL_THEME;
 		hideThinkingBlock = false;
@@ -34,7 +31,6 @@ function makeStubAssistant() {
 		lastMessage: any = undefined;
 		contentContainer = new StubContentContainer();
 		updateContent(message: any) {
-			// Minimal mirror of the real logic for the two branches we need.
 			this.lastMessage = message;
 			this.contentContainer.clear();
 			const hasVisibleContent = message.content.some(
@@ -70,7 +66,7 @@ function makeStubAssistant() {
 					} else {
 						this.contentContainer.addChild({
 							__type: "Markdown",
-							text: `Thinking: ${content.thinking.trim()}`,
+							text: content.thinking.trim(),
 							theme: this.markdownTheme,
 						});
 						if (hasVisibleAfter) this.contentContainer.addChild({ __type: "Spacer" });
@@ -98,37 +94,21 @@ function makeStubTheme() {
 // ---------------------------------------------------------------------------
 
 describe("patchTarget: thinking branch", () => {
-	test("Test 1: thinking branch inlines an ACCENT-colored 'Thinking:' label into the body markdown with a NON-original theme", () => {
+	test("thinking branch uses MUTED theme (label comes from message_end transform)", () => {
 		const Stub = makeStubAssistant();
 		patchTarget(Stub, makeStubTheme, { skipShapeCheck: true });
 		const inst = new Stub();
 		inst.updateContent({ content: [{ type: "thinking", thinking: "hello" }] });
 
-		const children = inst.contentContainer.children;
-		// No separate Text label — the label now lives inside the body Markdown.
-		const stray = children.find(
-			(c: any) => isText(c) && typeof c.text === "string" && c.text.includes("Thinking"),
-		);
-		expect(stray).toBeUndefined();
-
-		// Exactly one Markdown child. Its text must contain:
-		//   - the accent-wrapped "Thinking:" label (via stub: [accent]Thinking:[/])
-		//   - a re-emit of the thinkingText ANSI escape right after, to keep the
-		//     body from falling back to default terminal fg
-		//   - the body text
+		const children = inst.contentContainer.children.filter((c: any) => !isSpacer(c));
 		const md = children.find((c: any) => isMarkdown(c));
 		expect(md).toBeDefined();
-		expect(md.text).toContain("[accent]<b>Thinking...</b>[/]");
-		expect(md.text).toContain("\x1b[38;2;136;136;136m"); // thinkingText re-emit
-		expect(md.text).toContain("hello");
-		// Label must precede the body
-		expect(md.text.indexOf("[accent]<b>Thinking...</b>[/]")).toBeLessThan(
-			md.text.indexOf("hello"),
-		);
+		// Theme should be a muted theme (built by buildMutedMarkdownTheme), NOT the original
 		expect(md.theme).not.toBe(ORIGINAL_THEME);
+		expect(typeof md.theme.highlightCode).toBe("function");
 	});
 
-	test("Test 2: text branch still uses the ORIGINAL markdownTheme", () => {
+	test("text branch still uses the ORIGINAL markdownTheme", () => {
 		const Stub = makeStubAssistant();
 		patchTarget(Stub, makeStubTheme, { skipShapeCheck: true });
 		const inst = new Stub();
@@ -139,7 +119,7 @@ describe("patchTarget: thinking branch", () => {
 		expect(md.theme).toBe(ORIGINAL_THEME);
 	});
 
-	test("Test 3: patchTarget is idempotent — second call is a no-op", () => {
+	test("patchTarget is idempotent — second call is a no-op", () => {
 		const Stub = makeStubAssistant();
 		patchTarget(Stub, makeStubTheme, { skipShapeCheck: true });
 		const firstFn = Stub.prototype.updateContent;
@@ -149,7 +129,7 @@ describe("patchTarget: thinking branch", () => {
 		expect((Stub as any)[PATCH_GUARD]).toBe(true);
 	});
 
-	test("Test 4: empty thinking content adds no children", () => {
+	test("empty thinking content adds no children", () => {
 		const Stub = makeStubAssistant();
 		patchTarget(Stub, makeStubTheme, { skipShapeCheck: true });
 		const inst = new Stub();
@@ -157,7 +137,7 @@ describe("patchTarget: thinking branch", () => {
 		expect(inst.contentContainer.children.length).toBe(0);
 	});
 
-	test("Test 5: hidden thinking adds exactly one child (the hidden label)", () => {
+	test("hidden thinking adds exactly one child (the hidden label)", () => {
 		const Stub = makeStubAssistant();
 		patchTarget(Stub, makeStubTheme, { skipShapeCheck: true });
 		const inst = new Stub();
@@ -165,20 +145,16 @@ describe("patchTarget: thinking branch", () => {
 		inst.updateContent({ content: [{ type: "thinking", thinking: "hi" }] });
 
 		const children = inst.contentContainer.children;
-		// Filter out the leading Spacer(1) — that's always emitted when there's
-		// visible content, and it's not part of the rendered "thinking" payload.
 		const rendered = children.filter((c: any) => !isSpacer(c));
 		expect(rendered.length).toBe(1);
 		expect(isText(rendered[0])).toBe(true);
-		// Hidden branch must NOT produce a body Markdown.
 		const markdowns = children.filter((c: any) => isMarkdown(c));
 		expect(markdowns.length).toBe(0);
 	});
 
-	test("Test 6: without skipShapeCheck, malformed stub is NOT patched", () => {
+	test("without skipShapeCheck, malformed stub is NOT patched", () => {
 		const Stub = makeStubAssistant();
 		const before = Stub.prototype.updateContent;
-		// Silence console.warn for this test.
 		const origWarn = console.warn;
 		console.warn = () => {};
 		try {
@@ -189,43 +165,5 @@ describe("patchTarget: thinking branch", () => {
 		const after = Stub.prototype.updateContent;
 		expect(after).toBe(before);
 		expect((Stub as any)[PATCH_GUARD]).toBeFalsy();
-	});
-
-	test("Test 7: text branch unindents code blocks", () => {
-		const Stub = makeStubAssistant();
-		patchTarget(Stub, makeStubTheme, { skipShapeCheck: true });
-		const inst = new Stub();
-		const codeInput =
-			"Here's code:\n```js\n  const x = 1;\n  const y = 2;\n```\nDone.";
-		inst.updateContent({ content: [{ type: "text", text: codeInput }] });
-
-		const md = inst.contentContainer.children.find((c: any) => isMarkdown(c));
-		expect(md).toBeDefined();
-		// The indented code should be unindented
-		expect(md.text).toContain("const x = 1;");
-		expect(md.text).toContain("const y = 2;");
-		// The 2-space indented version should NOT be present
-		expect(md.text).not.toContain("  const x = 1;");
-		expect(md.text).not.toContain("  const y = 2;");
-		// Prose outside the code block should be preserved
-		expect(md.text).toContain("Here's code:");
-		expect(md.text).toContain("Done.");
-	});
-
-	test("Test 8: thinking branch unindents code blocks", () => {
-		const Stub = makeStubAssistant();
-		patchTarget(Stub, makeStubTheme, { skipShapeCheck: true });
-		const inst = new Stub();
-		const thinkingInput = "```js\n  const x = 1;\n```";
-		inst.updateContent({ content: [{ type: "thinking", thinking: thinkingInput }] });
-
-		const md = inst.contentContainer.children.find((c: any) => isMarkdown(c));
-		expect(md).toBeDefined();
-		// The indented code should be unindented
-		expect(md.text).toContain("const x = 1;");
-		expect(md.text).not.toContain("  const x = 1;");
-		// The Thinking... label and ANSI codes should still be present
-		expect(md.text).toContain("Thinking...");
-		expect(md.text).toContain("\x1b[38;2;136;136;136m"); // thinkingText re-emit
 	});
 });
